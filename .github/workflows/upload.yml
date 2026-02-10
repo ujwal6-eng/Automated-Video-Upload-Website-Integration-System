@@ -1,1 +1,40 @@
+name: Drive to YouTube Upload
 
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/10 * * * *"   # har 10 min check
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run upload script
+        env:
+          DRIVE_REFRESH_TOKEN: ${{ secrets.DRIVE_REFRESH_TOKEN }}
+          DRIVE_CLIENT_ID: ${{ secrets.DRIVE_CLIENT_ID }}
+          DRIVE_CLIENT_SECRET: ${{ secrets.DRIVE_CLIENT_SECRET }}
+
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+
+          PENDING_FOLDER_ID: ${{ secrets.PENDING_FOLDER_ID }}
+          PROCESSING_FOLDER_ID: ${{ secrets.PROCESSING_FOLDER_ID }}
+          UPLOADED_FOLDER_ID: ${{ secrets.UPLOADED_FOLDER_ID }}
+          FAILED_FOLDER_ID: ${{ secrets.FAILED_FOLDER_ID }}
+
+        run: python upload.py
