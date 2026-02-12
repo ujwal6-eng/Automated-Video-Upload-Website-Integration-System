@@ -1,39 +1,27 @@
 import os
+import json
 import io
-import requests
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
 
-# ENV
+# ENV VARIABLES
 PENDING_FOLDER_ID = os.getenv("PENDING_FOLDER_ID")
 PROCESSING_FOLDER_ID = os.getenv("PROCESSING_FOLDER_ID")
 UPLOADED_FOLDER_ID = os.getenv("UPLOADED_FOLDER_ID")
 FAILED_FOLDER_ID = os.getenv("FAILED_FOLDER_ID")
 
-
-def get_drive_service():
-    creds = Credentials(
-        None,
-        refresh_token=os.getenv("DRIVE_REFRESH_TOKEN"),
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=os.getenv("DRIVE_CLIENT_ID"),
-        client_secret=os.getenv("DRIVE_CLIENT_SECRET"),
-        scopes=["https://www.googleapis.com/auth/drive"]
-    )
-    return build("drive", "v3", credentials=creds)
+GOOGLE_TOKEN_JSON = os.getenv("GOOGLE_TOKEN_JSON")
 
 
-def get_youtube_service():
-    creds = Credentials(
-        None,
-        refresh_token=os.getenv("YT_REFRESH_TOKEN"),
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=os.getenv("YT_CLIENT_ID"),
-        client_secret=os.getenv("YT_CLIENT_SECRET"),
-        scopes=["https://www.googleapis.com/auth/youtube.upload"]
-    )
-    return build("youtube", "v3", credentials=creds)
+def get_services():
+    creds_data = json.loads(GOOGLE_TOKEN_JSON)
+    creds = Credentials.from_authorized_user_info(creds_data)
+
+    drive = build("drive", "v3", credentials=creds)
+    youtube = build("youtube", "v3", credentials=creds)
+
+    return drive, youtube
 
 
 def list_pending_files(drive):
@@ -44,11 +32,11 @@ def list_pending_files(drive):
 
 def move_file(drive, file_id, target_folder):
     file = drive.files().get(fileId=file_id, fields="parents").execute()
-    prev_parents = ",".join(file.get("parents"))
+    previous_parents = ",".join(file.get("parents"))
     drive.files().update(
         fileId=file_id,
         addParents=target_folder,
-        removeParents=prev_parents
+        removeParents=previous_parents
     ).execute()
 
 
@@ -56,9 +44,11 @@ def download_file(drive, file_id, filename):
     request = drive.files().get_media(fileId=file_id)
     fh = io.FileIO(filename, "wb")
     downloader = MediaIoBaseDownload(fh, request)
+
     done = False
     while not done:
         _, done = downloader.next_chunk()
+
     return filename
 
 
@@ -68,7 +58,7 @@ def upload_to_youtube(youtube, file_path, title):
         "status": {"privacyStatus": "unlisted"}
     }
 
-    media = MediaFileUpload(file_path, chunksize=-1, resumable=True)
+    media = MediaFileUpload(file_path, resumable=True)
 
     request = youtube.videos().insert(
         part="snippet,status",
@@ -86,12 +76,12 @@ def upload_to_youtube(youtube, file_path, title):
 def main():
     print("🚀 Automation started")
 
-    drive = get_drive_service()
-    youtube = get_youtube_service()
+    drive, youtube = get_services()
 
     files = list_pending_files(drive)
+
     if not files:
-        print("✅ No pending videos")
+        print("✅ No pending videos found")
         return
 
     file = files[0]
@@ -101,19 +91,23 @@ def main():
     print("🎬 Processing:", filename)
 
     try:
+        # Move to processing
         move_file(drive, file_id, PROCESSING_FOLDER_ID)
 
+        # Download locally
         local_path = download_file(drive, file_id, filename)
+
+        # Upload to YouTube
         video_id = upload_to_youtube(youtube, local_path, filename)
 
         print("✅ Uploaded to YouTube:", video_id)
+        print("🔗 URL:", f"https://www.youtube.com/watch?v={video_id}")
 
+        # Move to uploaded
         move_file(drive, file_id, UPLOADED_FOLDER_ID)
 
-        print("🔗 Video URL:", f"https://www.youtube.com/watch?v={video_id}")
-
     except Exception as e:
-        print("❌ ERROR:", e)
+        print("❌ ERROR:", str(e))
         move_file(drive, file_id, FAILED_FOLDER_ID)
 
 
