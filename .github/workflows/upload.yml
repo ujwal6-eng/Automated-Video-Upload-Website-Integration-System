@@ -3,7 +3,7 @@ name: Drive to YouTube Automation
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/10 * * * *"   # every 10 minutes
+    - cron: "*/10 * * * *"   # Runs every 10 minutes
 
 jobs:
   upload:
@@ -31,4 +31,5 @@ jobs:
           UPLOADED_FOLDER_ID: ${{ secrets.UPLOADED_FOLDER_ID }}
           FAILED_FOLDER_ID: ${{ secrets.FAILED_FOLDER_ID }}
           VIDEO_WEBHOOK_SECRET: ${{ secrets.VIDEO_WEBHOOK_SECRET }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: python upload.py
